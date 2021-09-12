@@ -1,0 +1,139 @@
+---
+title: "Tarea_1"
+author: "Karl Vidal"
+date: "05-09-2021"
+output: pdf_document
+---
+
+```{r}
+rm(list = ls())
+library(readxl)
+library(readr)
+library(dplyr)
+library(janitor)
+library(kableExtra)
+library(skimr)
+```
+
+```{r}
+parto=read.csv("Bases/data_parto.csv")
+fertilidad=read_xlsx("Bases/data_fertilidad.xlsx")
+natural=read_xlsx("Bases/data_natural.xlsx")
+crecimiento=read_xlsx("Bases/data_crecimiento.xlsx")
+esperanza_de_vida=read_xlsx("Bases/data_esperanza_de_vida.xlsx")
+```
+
+```{r}
+esperanza_de_vida_hombre= esperanza_de_vida %>% filter(sex=="Male")
+esperanza_de_vida_mujer= esperanza_de_vida %>% filter(sex=="Female")
+esperanza_de_vida_hombre=esperanza_de_vida_hombre %>% rename("expectancy_male"="expectancy")
+esperanza_de_vida_mujer=esperanza_de_vida_mujer %>% rename("expectancy_female"="expectancy")
+
+```
+
+
+```{r}
+fertilidad=fertilidad %>% rename("countrycode"="country code")
+natural=natural %>% rename("countrycode"="country_code")
+parto=parto %>% rename("countrycode"="country_code")
+```
+
+```{r}
+Base_Datos=crecimiento %>% left_join(fertilidad, by=c("countrycode","period")) %>% left_join(natural, by=c("countrycode", "period")) %>% left_join(parto, by=c("countrycode", "period")) %>% left_join(esperanza_de_vida_hombre, by=c("countrycode", "period")) %>% left_join(esperanza_de_vida_mujer, by=c("countrycode", "period"))
+  
+```
+
+# Pregunta 1
+
+```{r}
+Base_Datos=Base_Datos %>% mutate(Año=case_when(
+period=="2050-2055" | period=="2055-2060" | period=="2060-2065" | period=="2065-2070" | period=="2070-2075" | period=="2075-2080" | period=="2080-2085" | period=="2085-2090" | period=="2090-2095" | period=="2095-2100" ~ ">2050",
+period=="1950-1955" | period=="1955-1960" | period=="1960-1965" | period=="1965-1970" | period=="1970-1975" | period=="1975-1980" | period=="1980-1985" | period=="1985-1990" | period=="1990-1995" | period=="1995-2000" ~ "<2000",
+TRUE ~ "2000-2050"
+))
+```
+
+```{r}
+Base_Datos %>%  tabyl(Año, name) %>% adorn_totals(c("col","row")) %>%  kbl(booktabs = T,
+      col.names = c("Año/Paises","Bolivia","Brazil","Chile","Ecuador","Haiti","Total"),
+      linesep='') %>% 
+  kable_styling(latex_options = c("stripped", "hold_position"))
+```
+# Pregunta 2
+
+```{r}
+
+Base_Datos=type_convert(Base_Datos,trim_ws=TRUE,col_types = cols(Pesos=col_integer(),Alturas=col_double()),locale = locale(decimal_mark = ","))
+```
+
+
+```{r}
+Base_Datos %>% select(growth,fertility,natural,childbearing) %>% skim() %>% 
+  yank("numeric") %>%
+select(-c("n_missing", "complete_rate", "hist")) %>%
+kbl(booktabs = T,
+col.names = c("Variable", "Media", "Desv. Estándar", "Mínimo", "p25", "p50", "p75", "Máximo"),
+linesep = ''
+,digits = 2) %>%
+kable_styling(latex_options = c("striped", "hold_position"))
+```
+
+# Pregunta 3
+
+```{r}
+Base_Datos %>%
+filter(period=="2000-2005" | period=="2005-2010" | period=="2010-2015" | period=="2015-2020") %>% 
+select(name, fertility, childbearing, expectancy_male, expectancy_female, growth, natural ) %>%
+group_by(name) %>%
+skim() %>%
+yank("numeric") %>%
+select(-c("skim_variable", "n_missing", "complete_rate", "hist")) %>%
+kbl(booktabs = T,
+col.names = c("País", "Media", "Desv. Estándar", "Mínimo", "p25", "p50", "p75", "Máximo"),
+linesep = '',
+digits = 2) %>%
+kable_styling(latex_options = c("striped", "hold_position")) %>% 
+pack_rows("Fertilidad", 1, 5) %>% 
+pack_rows("Parto", 6, 10) %>% 
+pack_rows("Esperanza de vida (Hombre)", 11, 15) %>% 
+pack_rows("Esperanza de vida (Mujer)", 16, 20) %>% 
+pack_rows("Crecimiento", 21, 25) %>% 
+pack_rows("Natural", 26, 30)
+```
+# Pregunta 4
+
+```{r}
+Base_Datos %>% filter(name %in% c("Bolivia (Plurinational State of)", "Chile", "Haiti")) %>% filter(period=="1990-1995" | period=="1995-2000" | period=="2000-2005" | period=="2005-2010" | period=="2010-2015" | period=="2015-2020" | period=="2020-2025" | period=="2025-2030")
+```
+
+
+```{r}
+library(ggplot2)
+Base_Datos %>% filter(name %in% c("Bolivia (Plurinational State of)", "Chile", "Haiti")) %>% filter(period=="1990-1995" | period=="1995-2000" | period=="2000-2005" | period=="2005-2010" | period=="2010-2015" | period=="2015-2020" | period=="2020-2025" | period=="2025-2030") %>% 
+  ggplot(aes(x=period, y=childbearing, group=name)) + geom_line(aes(colour=name))
+```
+
+# Pregunta 5
+
+```{r}
+Base_Datos %>% filter(period=="1990-1995" | period=="1995-2000" | period=="2000-2005" | period=="2005-2010" | period=="2010-2015" | period=="2015-2020" | period=="2020-2025" | period=="2025-2030") %>% group_by(name) %>% select(name, growth) %>% skim() %>%
+yank("numeric") %>%
+select("name","mean","sd") %>% 
+ggplot(aes(x=name,y=mean, group=name)) + geom_bar_text(position = "stack", reflow = TRUE, size = 9)+
+  geom_col(fill = "#013e63") + geom_errorbar(aes(ymin = mean-1.86*sd/sqrt(8), ymax = mean+1.86*sd/sqrt(8)), width = 0.2)
+```
+
+# Pregunta 6
+
+```{r}
+library(CGPfunctions)
+Base_Datos %>% group_by(name) %>% filter(period=="2020-2025" | period=="2025-2030") %>% select(period, name,fertility) %>% newggslopegraph(
+                Times = period,
+                Measurement = fertility,
+                Grouping = name,
+                Title = "Evolución de fertilidad",
+                SubTitle = "2020-2030",
+                Caption = "Fuente: Elaboración propia"
+                )
+```
+
